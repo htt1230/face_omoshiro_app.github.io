@@ -16,21 +16,14 @@
         <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
         <span>MirrorFace</span>
       </div>
-      <span class="header-note"><span class="green-dot"></span> 画像はブラウザ内で処理</span>
     </header>
 
     <main>
-      <div class="intro">
-        <p class="eyebrow"><span class="eyebrow-line"></span> FACE SYMMETRY STUDIO</p>
-        <h1>あなたの顔の、<br><em>もうひとつの表情。</em></h1>
-        <p class="intro-copy">写真から顔の中心を自動検知。左側・右側をそれぞれ鏡写しにして、2つの対称顔をつくります。</p>
-      </div>
 
       <div class="workspace-grid">
         <section class="panel editor-panel" aria-labelledby="editor-title">
           <div class="panel-heading">
             <div>
-              <span class="step-number">01 / INPUT</span>
               <h2 id="editor-title">写真を選ぶ</h2>
             </div>
             <span class="tag">JPG · PNG · WebP</span>
@@ -59,23 +52,10 @@
             </div>
             <div class="detect-state" id="detectState" role="status" aria-live="polite"></div>
 
-            <div class="adjust-panel">
-              <div class="setting-heading"><h3>中心線の調整</h3><span id="axisDisplay" class="axis-display"></span></div>
-              <label for="faceSelect" class="control-label">顔の選択</label>
-              <select id="faceSelect" class="select-field"><option value="manual">手動設定</option></select>
-              <label for="axisRange" class="control-label range-label">左右反転する軸 <span class="hint">横方向</span></label>
-              <input id="axisRange" class="range-field" type="range" min="1" max="99" value="50" />
-              <div class="range-marks"><span>左</span><span>右</span></div>
-              <button id="resetAxis" type="button" class="reset-button">↶ 顔の中心に戻す</button>
-            </div>
           </div>
         </section>
 
         <section class="panel results-panel" aria-labelledby="results-title">
-          <div class="panel-heading">
-            <div><span class="step-number">02 / RESULTS</span><h2 id="results-title">生成結果</h2></div>
-            <span class="tag accent-tag">2 PATTERNS</span>
-          </div>
           <div id="emptyResults" class="results-empty">
             <div class="placeholder-graphic" aria-hidden="true">
               <div class="placeholder-face left-face"><div class="fake-eye"></div><div class="fake-mouth"></div></div>
@@ -102,6 +82,24 @@
           </div>
         </section>
       </div>
+      <section id="adjustPanel" class="panel adjust-panel hidden" aria-label="中心線の調整">
+        <div class="setting-heading"><h3>中心線を調整</h3><span id="axisDisplay" class="axis-display"></span></div>
+        <div class="adjust-controls">
+          <label for="faceSelect" class="control-label">顔</label>
+          <select id="faceSelect" class="select-field"><option value="manual">手動</option></select>
+          <div class="axis-control">
+            <label for="axisRange" class="control-label range-label">反転する位置</label>
+            <input id="axisRange" class="range-field" type="range" min="1" max="99" value="50" />
+            <div class="range-marks"><span>← 左</span><span>右 →</span></div>
+          </div>
+          <div class="axis-control angle-control">
+            <label for="angleRange" class="control-label range-label">角度 <output id="angleDisplay" for="angleRange">0°</output></label>
+            <input id="angleRange" class="range-field" type="range" min="-30" max="30" value="0" />
+            <div class="range-marks"><span>−30°</span><span>＋30°</span></div>
+          </div>
+          <button id="resetAxis" type="button" class="reset-button">↶ 中心に戻す</button>
+        </div>
+      </section>
       <div class="info-strip"><span class="info-icon">✦</span><p><strong>プライバシーに配慮。</strong> 写真はサーバーにアップロードされません。顔検知・画像生成は端末のブラウザ内で実行されます。初回のみAIモデルを読み込みます。</p></div>
     </main>
     <footer><span>MirrorFace</span><span>Made for the curious side of you.</span></footer>

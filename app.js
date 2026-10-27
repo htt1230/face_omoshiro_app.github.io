@@ -20,11 +20,16 @@ const rightCanvas = $("rightCanvas");
 const faceSelect = $("faceSelect");
 const axisRange = $("axisRange");
 const axisDisplay = $("axisDisplay");
+const angleRange = $("angleRange");
+const angleDisplay = $("angleDisplay");
 const detectState = $("detectState");
 
 const sourceCanvas = document.createElement("canvas");
 const detectionCanvas = document.createElement("canvas");
+const halfCanvas = document.createElement("canvas");
 let axisX = 0;
+let axisY = 0;
+let axisAngle = 0;
 let faces = [];
 let activeFace = -1;
 let currentFilename = "mirrorface";
@@ -76,24 +81,28 @@ function drawPreview() {
     const face = faces[i];
     ctx.save();
     ctx.lineWidth = i === activeFace ? 2.5 : 1.5;
-    ctx.strokeStyle = i === activeFace ? "#b3a6ff" : "rgba(255,255,255,.75)";
+  ctx.strokeStyle = i === activeFace ? "#777" : "rgba(255,255,255,.75)";
     ctx.setLineDash(i === activeFace ? [] : [6, 5]);
     ctx.strokeRect(face.x * sx, face.y * sy, face.width * sx, face.height * sy);
     ctx.restore();
   }
-  const x = Math.round(axisX * sx) + 0.5;
+  const cx = axisX * sx;
+  const cy = axisY * sy;
+  const radians = axisAngle * Math.PI / 180;
+  const dx = Math.sin(radians) * Math.max(pw, ph);
+  const dy = Math.cos(radians) * Math.max(pw, ph);
   ctx.save();
   ctx.lineWidth = Math.max(2, pw / 450);
   ctx.shadowColor = "rgba(20,10,80,.6)";
   ctx.shadowBlur = 7;
   ctx.strokeStyle = "#ffffff";
   ctx.setLineDash([9, 6]);
-  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ph); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = "#6859dd";
+  ctx.fillStyle = "#555";
   ctx.strokeStyle = "white";
   ctx.lineWidth = 2.3;
-  ctx.beginPath(); ctx.arc(x, ph / 2, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.restore();
 }
 
@@ -103,7 +112,6 @@ function drawMirroredResults() {
   const srcW = sourceCanvas.width;
   const srcH = sourceCanvas.height;
   const half = Math.max(1, Math.min(axisX, srcW - axisX));
-  const cropX = axisX - half;
   const outW = half * 2;
   for (const canvas of [leftCanvas, rightCanvas]) {
     if (canvas.width !== outW || canvas.height !== srcH) {
@@ -111,23 +119,27 @@ function drawMirroredResults() {
       canvas.height = srcH;
     }
   }
-  const left = leftCanvas.getContext("2d");
-  left.clearRect(0, 0, outW, srcH);
-  left.drawImage(sourceCanvas, cropX, 0, half, srcH, 0, 0, half, srcH);
-  left.save();
-  left.translate(outW, 0);
-  left.scale(-1, 1);
-  left.drawImage(sourceCanvas, cropX, 0, half, srcH, 0, 0, half, srcH);
-  left.restore();
-
-  const right = rightCanvas.getContext("2d");
-  right.clearRect(0, 0, outW, srcH);
-  right.drawImage(sourceCanvas, axisX, 0, half, srcH, half, 0, half, srcH);
-  right.save();
-  right.translate(outW, 0);
-  right.scale(-1, 1);
-  right.drawImage(sourceCanvas, axisX, 0, half, srcH, half, 0, half, srcH);
-  right.restore();
+  const theta = axisAngle * Math.PI / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const cx = axisX, cy = axisY;
+  const drawSide = (canvas, side) => {
+    const ctx = canvas.getContext("2d");
+    halfCanvas.width = half; halfCanvas.height = srcH;
+    ctx.clearRect(0, 0, outW, srcH);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, half, srcH); ctx.clip();
+    const offset = side === "left" ? half : 0;
+    // Match the preview axis: its direction is (sin θ, cos θ).
+    // Local horizontal distance is therefore the perpendicular (cos θ, -sin θ).
+    ctx.setTransform(cos, sin, -sin, cos, offset - cos * cx + sin * cy, cy - sin * cx - cos * cy);
+    ctx.drawImage(sourceCanvas, 0, 0);
+    ctx.restore();
+    halfCanvas.getContext("2d").drawImage(canvas, 0, 0, half, srcH, 0, 0, half, srcH);
+    ctx.save(); ctx.translate(outW, 0); ctx.scale(-1, 1); ctx.drawImage(halfCanvas, 0, 0);
+    ctx.restore();
+  };
+  drawSide(leftCanvas, "left");
+  drawSide(rightCanvas, "right");
 }
 
 function setFaceOptions() {
@@ -144,6 +156,7 @@ function setFaceOptions() {
 function applyFace(index) {
   if (!faces[index]) return;
   activeFace = index;
+  axisY = faces[index].centerY;
   faceSelect.value = String(index);
   updateAxis(faces[index].centerX);
 }
@@ -184,7 +197,7 @@ async function detectFaces(sequence) {
         const y = b.originY * scaleY;
         const width = b.width * scaleX;
         const height = b.height * scaleY;
-        return { x, y, width, height, centerX: x + width / 2 };
+        return { x, y, width, height, centerX: x + width / 2, centerY: y + height / 2 };
       })
       .filter(Boolean)
       .sort((a,b) => b.width*b.height - a.width*a.height);
@@ -244,6 +257,7 @@ async function handleFile(file) {
   const ratio = Math.min(1, MAX_IMAGE_SIDE / Math.max(origW, origH));
   sourceCanvas.width = Math.max(2, Math.round(origW * ratio));
   sourceCanvas.height = Math.max(2, Math.round(origH * ratio));
+  axisY = sourceCanvas.height / 2;
   const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: false });
   sourceCtx.drawImage(image, 0, 0, sourceCanvas.width, sourceCanvas.height);
   currentFilename = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9\u3040-\u30ff\u3400-\u9fff_-]+/g, "_").slice(0, 75) || "mirrorface";
@@ -254,6 +268,7 @@ async function handleFile(file) {
   setFaceOptions();
   dropzone.classList.add("hidden");
   workspace.classList.remove("hidden");
+  $("adjustPanel").classList.remove("hidden");
   $("emptyResults").classList.add("hidden");
   $("results").classList.remove("hidden");
   updateAxis(Math.round(sourceCanvas.width / 2));
@@ -265,7 +280,10 @@ function setAxisFromPointer(event) {
   const box = previewCanvas.getBoundingClientRect();
   if (!box.width) return;
   const x = (event.clientX - box.left) / box.width * sourceCanvas.width;
-  updateAxis(x, true);
+  const y = (event.clientY - box.top) / box.height * sourceCanvas.height;
+  const theta = axisAngle * Math.PI / 180;
+  const pivotOffset = Math.tan(theta) * (y - axisY);
+  updateAxis(x - pivotOffset, true);
 }
 
 async function saveCanvas(canvas, filename) {
@@ -299,6 +317,12 @@ fileInput.addEventListener("change", () => {
 });
 $("changeImage").addEventListener("click", () => fileInput.click());
 axisRange.addEventListener("input", () => updateAxis(Number(axisRange.value), true));
+angleRange.addEventListener("input", () => {
+  axisAngle = Number(angleRange.value);
+  angleDisplay.value = `${axisAngle}°`;
+  angleDisplay.textContent = `${axisAngle}°`;
+  requestDraw();
+});
 faceSelect.addEventListener("change", () => {
   if (faceSelect.value === "manual") { activeFace = -1; requestDraw(); return; }
   applyFace(Number(faceSelect.value));
