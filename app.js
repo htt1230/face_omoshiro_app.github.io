@@ -7,20 +7,14 @@ const WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPI
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
 const MAX_IMAGE_SIDE = 3200;
 const MAX_DETECTION_SIDE = 1024;
-const MAX_PREVIEW_SIDE = 1100;
 
 const $ = (id) => document.getElementById(id);
 const fileInput = $("fileInput");
 const dropzone = $("dropzone");
-const workspace = $("workspace");
-const previewWrap = $("previewWrap");
-const previewCanvas = $("previewCanvas");
 const leftCanvas = $("leftCanvas");
 const rightCanvas = $("rightCanvas");
 const resultGrid = $("resultGrid");
-const faceSelect = $("faceSelect");
-const axisRange = $("axisRange");
-const axisDisplay = $("axisDisplay");
+const resultDivider = $("resultDivider");
 const angleRange = $("angleRange");
 const angleDisplay = $("angleDisplay");
 const detectState = $("detectState");
@@ -31,26 +25,25 @@ const halfCanvas = document.createElement("canvas");
 let axisX = 0;
 let axisY = 0;
 let axisAngle = 0;
-let faces = [];
-let activeFace = -1;
+let initialAxis = { x: 0, y: 0 };
+let manualRevision = 0;
 let currentFilename = "mirrorface";
 let loadSequence = 0;
 let detectorPromise = null;
 let drawingQueued = false;
-let pointerDown = false;
+let dividerPointerId = null;
+let dividerGrabOffset = 0;
 
 function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
 function showStatus(message, kind = "success") {
-  detectState.textContent = message;
-  detectState.className = "detect-state" + (kind === "success" ? "" : ` ${kind}`);
+  detectState.textContent = kind === "success" ? "" : message;
+  detectState.className = "detect-state" + (kind === "success" ? " hidden" : ` ${kind}`);
 }
 
 function updateAxis(nextValue, manual = false) {
   if (!sourceCanvas.width) return;
   axisX = clamp(Math.round(nextValue), 1, sourceCanvas.width - 1);
-  axisRange.value = String(axisX);
-  axisDisplay.textContent = `${Math.round(axisX / sourceCanvas.width * 100)}%`;
-  if (manual) { activeFace = -1; faceSelect.value = "manual"; }
+  if (manual) manualRevision++;
   requestDraw();
 }
 
@@ -60,51 +53,8 @@ function requestDraw() {
   requestAnimationFrame(() => {
     drawingQueued = false;
     if (!sourceCanvas.width) return;
-    drawPreview();
     drawMirroredResults();
   });
-}
-
-function drawPreview() {
-  const s = Math.min(1, MAX_PREVIEW_SIDE / Math.max(sourceCanvas.width, sourceCanvas.height));
-  const pw = Math.max(1, Math.round(sourceCanvas.width * s));
-  const ph = Math.max(1, Math.round(sourceCanvas.height * s));
-  if (previewCanvas.width !== pw || previewCanvas.height !== ph) {
-    previewCanvas.width = pw;
-    previewCanvas.height = ph;
-  }
-  const ctx = previewCanvas.getContext("2d");
-  ctx.clearRect(0, 0, pw, ph);
-  ctx.drawImage(sourceCanvas, 0, 0, pw, ph);
-  const sx = pw / sourceCanvas.width;
-  const sy = ph / sourceCanvas.height;
-  for (let i = 0; i < faces.length; i++) {
-    const face = faces[i];
-    ctx.save();
-    ctx.lineWidth = i === activeFace ? 2.5 : 1.5;
-    ctx.strokeStyle = i === activeFace ? "#777" : "rgba(255,255,255,.75)";
-    ctx.setLineDash(i === activeFace ? [] : [6, 5]);
-    ctx.strokeRect(face.x * sx, face.y * sy, face.width * sx, face.height * sy);
-    ctx.restore();
-  }
-  const cx = axisX * sx;
-  const cy = axisY * sy;
-  const radians = axisAngle * Math.PI / 180;
-  const dx = Math.sin(radians) * Math.max(pw, ph);
-  const dy = Math.cos(radians) * Math.max(pw, ph);
-  ctx.save();
-  ctx.lineWidth = Math.max(2, pw / 450);
-  ctx.shadowColor = "rgba(20,10,80,.6)";
-  ctx.shadowBlur = 7;
-  ctx.strokeStyle = "#ffffff";
-  ctx.setLineDash([9, 6]);
-  ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = "#555";
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 2.3;
-  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.restore();
 }
 
 // Clip the rotated source rectangle at u = 0 (the reflection axis).
@@ -134,7 +84,7 @@ function drawMirroredResults() {
   const theta = axisAngle * Math.PI / 180;
   const cos = Math.cos(theta), sin = Math.sin(theta);
   const cx = axisX, cy = axisY;
-  // u is perpendicular to the preview axis; v runs along it.
+  // u is perpendicular to the reflection axis; v runs along it.
   const corners = [[0, 0], [srcW, 0], [srcW, srcH], [0, srcH]].map(([x, y]) => [
     cos * (x - cx) - sin * (y - cy),
     sin * (x - cx) + cos * (y - cy),
@@ -186,6 +136,8 @@ function layoutResults() {
   // with no minimum card width, padding allowance, or horizontal scrolling.
   resultGrid.style.gridTemplateColumns =
     `minmax(0, ${leftCanvas.width}fr) minmax(0, ${rightCanvas.width}fr)`;
+  resultDivider.style.left = `${available * leftCanvas.width / totalWidth + (parseFloat(style.columnGap) || 0) / 2}px`;
+  resultDivider.setAttribute("aria-valuenow", String(Math.round(axisX / sourceCanvas.width * 100)));
   for (const canvas of [leftCanvas, rightCanvas]) {
     canvas.style.setProperty("--display-width", `${canvas.width * scale}px`);
     canvas.style.setProperty("--display-height", `${canvas.height * scale}px`);
@@ -194,23 +146,56 @@ function layoutResults() {
 
 new ResizeObserver(layoutResults).observe(resultGrid);
 
-function setFaceOptions() {
-  faceSelect.replaceChildren();
-  const manualOption = new Option("中心線を手動で設定", "manual");
-  faceSelect.add(manualOption);
-  faces.forEach((face, idx) => {
-    const suffix = idx === 0 ? "（最大の顔）" : "";
-    faceSelect.add(new Option(`顔 ${idx + 1}${suffix}`, String(idx)));
-  });
-  faceSelect.value = activeFace < 0 ? "manual" : String(activeFace);
+function setAxisFromDivider(clientX) {
+  const rect = resultGrid.getBoundingClientRect();
+  const gap = parseFloat(getComputedStyle(resultGrid).columnGap) || 0;
+  const width = rect.width - gap;
+  if (!sourceCanvas.width || width <= 0) return;
+  const fraction = clamp((clientX - dividerGrabOffset - rect.left - gap / 2) / width, 0, 1);
+  const theta = axisAngle * Math.PI / 180;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  // Invert the projected width ratio, including the slanted axis's contribution.
+  const projectedWidth = cos * sourceCanvas.width + Math.abs(sin) * sourceCanvas.height;
+  const leftAtZero = sin >= 0 ? sin * (sourceCanvas.height - axisY) : -sin * axisY;
+  updateAxis((fraction * projectedWidth - leftAtZero) / cos, true);
 }
 
-function applyFace(index) {
-  if (!faces[index]) return;
-  activeFace = index;
-  axisY = faces[index].centerY;
-  faceSelect.value = String(index);
-  updateAxis(faces[index].centerX);
+resultDivider.addEventListener("pointerdown", (event) => {
+  if (dividerPointerId !== null || (event.pointerType === "mouse" && event.button !== 0)) return;
+  event.preventDefault();
+  const rect = resultDivider.getBoundingClientRect();
+  dividerGrabOffset = event.clientX - (rect.left + rect.width / 2);
+  dividerPointerId = event.pointerId;
+  resultDivider.focus({ preventScroll: true });
+  resultDivider.setPointerCapture(event.pointerId);
+  resultDivider.classList.add("is-dragging");
+});
+resultDivider.addEventListener("pointermove", (event) => {
+  if (event.pointerId === dividerPointerId) setAxisFromDivider(event.clientX);
+});
+for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  resultDivider.addEventListener(name, (event) => {
+    if (event.pointerId !== dividerPointerId) return;
+    dividerPointerId = null;
+    resultDivider.classList.remove("is-dragging");
+    if (resultDivider.hasPointerCapture(event.pointerId)) resultDivider.releasePointerCapture(event.pointerId);
+  });
+}
+resultDivider.addEventListener("keydown", (event) => {
+  const step = Math.max(1, Math.round(sourceCanvas.width / (event.shiftKey ? 20 : 200)));
+  const values = { ArrowLeft: axisX - step, ArrowRight: axisX + step, Home: 1, End: sourceCanvas.width - 1 };
+  if (!(event.key in values)) return;
+  event.preventDefault();
+  updateAxis(values[event.key], true);
+});
+
+function updateAngle(value, manual = false) {
+  axisAngle = value;
+  angleRange.value = String(value);
+  angleDisplay.value = `${value}°`;
+  angleDisplay.textContent = `${value}°`;
+  if (manual) manualRevision++;
+  requestDraw();
 }
 
 async function createDetector() {
@@ -229,7 +214,8 @@ async function createDetector() {
 }
 
 async function detectFaces(sequence) {
-  showStatus("AIモデルを読み込み、顔を検知しています…", "loading");
+  const revision = manualRevision;
+  showStatus("顔を検知中…", "loading");
   try {
     const detector = await createDetector();
     if (sequence !== loadSequence) return;
@@ -241,7 +227,7 @@ async function detectFaces(sequence) {
     if (sequence !== loadSequence) return;
     const scaleX = sourceCanvas.width / detectionCanvas.width;
     const scaleY = sourceCanvas.height / detectionCanvas.height;
-    faces = (result.detections ?? [])
+    const faces = (result.detections ?? [])
       .map((item) => {
         const b = item.boundingBox;
         if (!b) return null;
@@ -254,23 +240,21 @@ async function detectFaces(sequence) {
       .filter(Boolean)
       .sort((a,b) => b.width*b.height - a.width*a.height);
     if (faces.length) {
-      activeFace = 0;
-      setFaceOptions();
-      applyFace(0);
-      showStatus(`${faces.length}人の顔を検知しました。顔の中心に合わせて反転軸を設定しました。`);
+      initialAxis = { x: faces[0].centerX, y: faces[0].centerY };
+      // Detection initializes the image once; never overwrite an edit made while loading.
+      if (manualRevision === revision) {
+        axisY = initialAxis.y;
+        updateAxis(initialAxis.x);
+      }
+      showStatus("");
     } else {
-      activeFace = -1;
-      setFaceOptions();
-      showStatus("顔を自動検知できませんでした。写真の上で中心線を手動調整できます。", "warning");
+      showStatus("顔を検知できませんでした。中央の↔で調整できます。", "warning");
       requestDraw();
     }
   } catch (err) {
     if (sequence !== loadSequence) return;
     console.warn("Face detection unavailable:", err);
-    faces = [];
-    activeFace = -1;
-    setFaceOptions();
-    showStatus("顔検知モデルを読み込めませんでした。ネット接続を確認してください。手動調整と画像保存は使えます。", "warning");
+    showStatus("顔検知を読み込めませんでした。中央の↔で調整できます。", "warning");
     requestDraw();
   }
 }
@@ -313,29 +297,17 @@ async function handleFile(file) {
   const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: false });
   sourceCtx.drawImage(image, 0, 0, sourceCanvas.width, sourceCanvas.height);
   currentFilename = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9\u3040-\u30ff\u3400-\u9fff_-]+/g, "_").slice(0, 75) || "mirrorface";
-  $("fileLabel").textContent = `${file.name} · ${sourceCanvas.width} × ${sourceCanvas.height}px`;
-  axisRange.max = String(sourceCanvas.width - 1);
-  faces = [];
-  activeFace = -1;
-  setFaceOptions();
+  initialAxis = { x: sourceCanvas.width / 2, y: sourceCanvas.height / 2 };
+  manualRevision = 0;
+  updateAngle(0);
   dropzone.classList.add("hidden");
-  workspace.classList.remove("hidden");
+  document.querySelector(".workspace-grid").classList.add("has-image");
   $("adjustPanel").classList.remove("hidden");
   $("emptyResults").classList.add("hidden");
   $("results").classList.remove("hidden");
   updateAxis(Math.round(sourceCanvas.width / 2));
+  resultDivider.focus({ preventScroll: true });
   await detectFaces(sequence);
-}
-
-function setAxisFromPointer(event) {
-  if (!sourceCanvas.width) return;
-  const box = previewCanvas.getBoundingClientRect();
-  if (!box.width) return;
-  const x = (event.clientX - box.left) / box.width * sourceCanvas.width;
-  const y = (event.clientY - box.top) / box.height * sourceCanvas.height;
-  const theta = axisAngle * Math.PI / 180;
-  const pivotOffset = Math.tan(theta) * (y - axisY);
-  updateAxis(x - pivotOffset, true);
 }
 
 async function saveCanvas(canvas, filename) {
@@ -368,31 +340,11 @@ fileInput.addEventListener("change", () => {
   fileInput.value = "";
 });
 $("changeImage").addEventListener("click", () => fileInput.click());
-axisRange.addEventListener("input", () => updateAxis(Number(axisRange.value), true));
-angleRange.addEventListener("input", () => {
-  axisAngle = Number(angleRange.value);
-  angleDisplay.value = `${axisAngle}°`;
-  angleDisplay.textContent = `${axisAngle}°`;
-  requestDraw();
-});
-faceSelect.addEventListener("change", () => {
-  if (faceSelect.value === "manual") { activeFace = -1; requestDraw(); return; }
-  applyFace(Number(faceSelect.value));
-});
+angleRange.addEventListener("input", () => updateAngle(Number(angleRange.value), true));
 $("resetAxis").addEventListener("click", () => {
-  if (faces.length) applyFace(activeFace >= 0 ? activeFace : 0);
-  else updateAxis(sourceCanvas.width / 2, true);
+  axisY = initialAxis.y;
+  updateAngle(0);
+  updateAxis(initialAxis.x, true);
 });
-previewWrap.addEventListener("pointerdown", (event) => {
-  if (!sourceCanvas.width) return;
-  pointerDown = true;
-  previewWrap.setPointerCapture(event.pointerId);
-  setAxisFromPointer(event);
-});
-previewWrap.addEventListener("pointermove", (event) => {
-  if (pointerDown) setAxisFromPointer(event);
-});
-previewWrap.addEventListener("pointerup", () => { pointerDown = false; });
-previewWrap.addEventListener("pointercancel", () => { pointerDown = false; });
 $("saveLeft").addEventListener("click", () => saveCanvas(leftCanvas, `${currentFilename}_left_to_right.png`));
 $("saveRight").addEventListener("click", () => saveCanvas(rightCanvas, `${currentFilename}_right_to_left.png`));

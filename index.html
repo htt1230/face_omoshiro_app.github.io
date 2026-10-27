@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f6f5f2" />
   <meta name="description" content="画像から顔を検知し、左側・右側それぞれの左右対称な顔画像を生成できる、ブラウザ完結の無料ツール。" />
   <title>MirrorFace | 顔の左右対称画像ジェネレーター</title>
-  <link rel="stylesheet" href="./style.css" />
-  <script src="./app.js" defer></script>
+  <link rel="stylesheet" href="./style.css?v=68e748aa1db028ec" />
+  <script src="./app.js?v=fc82967e09af5ebc" defer></script>
 </head>
 <body>
   <div class="page">
@@ -40,19 +40,6 @@
             <small>なるべく正面を向いた顔の写真がおすすめです</small>
           </div>
 
-          <div id="workspace" class="hidden">
-            <div id="previewWrap" class="preview-wrap">
-              <canvas id="previewCanvas" aria-label="選択画像と顔中心の調整線" role="img"></canvas>
-              <div class="preview-corner">ORIGINAL</div>
-              <div class="preview-help">写真をタップ / ドラッグして軸を移動</div>
-            </div>
-            <div class="image-actions">
-              <span id="fileLabel" class="file-label"></span>
-              <button id="changeImage" class="text-button" type="button">写真を変更 <span aria-hidden="true">↗</span></button>
-            </div>
-            <div class="detect-state" id="detectState" role="status" aria-live="polite"></div>
-
-          </div>
         </section>
 
         <section class="panel results-panel" aria-label="生成画像">
@@ -66,6 +53,7 @@
             <p>写真をアップロードすると、<br>2パターンの対称画像がここに表示されます。</p>
           </div>
           <div id="results" class="hidden">
+            <div class="result-toolbar"><span class="detect-state hidden" id="detectState" role="status" aria-live="polite"></span><button id="changeImage" class="text-button" type="button">写真を変更 ↗</button></div>
             <div id="resultGrid" class="result-grid">
               <article class="result-card">
                 <div class="result-image"><canvas id="leftCanvas" aria-label="元画像の左半分を反転コピーした顔画像" role="img"></canvas></div>
@@ -75,27 +63,18 @@
                 <div class="result-image"><canvas id="rightCanvas" aria-label="元画像の右半分を反転コピーした顔画像" role="img"></canvas></div>
                 <button id="saveRight" class="download-button" type="button" aria-label="右側から作った画像をPNGで保存" title="画像を保存"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v3h16v-3"/></svg></button>
               </article>
+              <div id="resultDivider" class="result-divider" role="separator" tabindex="0" aria-label="左右に動かして反転位置を調整" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span aria-hidden="true">↔</span></div>
             </div>
           </div>
         </section>
       </div>
-      <section id="adjustPanel" class="panel adjust-panel hidden" aria-label="中心線の調整">
-        <div class="setting-heading"><h3>中心線を調整</h3><span id="axisDisplay" class="axis-display"></span></div>
-        <div class="adjust-controls">
-          <label for="faceSelect" class="control-label">顔</label>
-          <select id="faceSelect" class="select-field"><option value="manual">手動</option></select>
-          <div class="axis-control">
-            <label for="axisRange" class="control-label range-label">反転する位置</label>
-            <input id="axisRange" class="range-field" type="range" min="1" max="99" value="50" />
-            <div class="range-marks"><span>← 左</span><span>右 →</span></div>
-          </div>
-          <div class="axis-control angle-control">
-            <label for="angleRange" class="control-label range-label">角度 <output id="angleDisplay" for="angleRange">0°</output></label>
-            <input id="angleRange" class="range-field" type="range" min="-30" max="30" value="0" />
-            <div class="range-marks"><span>−30°</span><span>＋30°</span></div>
-          </div>
-          <button id="resetAxis" type="button" class="reset-button">↶ 中心に戻す</button>
+      <section id="adjustPanel" class="panel adjust-panel hidden" aria-label="角度の調整">
+        <div class="axis-control angle-control">
+          <label for="angleRange" class="control-label range-label">角度 <output id="angleDisplay" for="angleRange">0°</output></label>
+          <input id="angleRange" class="range-field" type="range" min="-30" max="30" value="0" />
+          <div class="range-marks"><span>−30°</span><span>＋30°</span></div>
         </div>
+        <button id="resetAxis" type="button" class="reset-button" aria-label="最初の位置と角度に戻す" title="最初の位置と角度に戻す"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/></svg></button>
       </section>
       <div class="info-strip"><span class="info-icon">✦</span><p><strong>プライバシーに配慮。</strong> 写真はサーバーにアップロードされません。顔検知・画像生成は端末のブラウザ内で実行されます。初回のみAIモデルを読み込みます。</p></div>
     </main>

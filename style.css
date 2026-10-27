@@ -127,7 +127,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, .dropzone:focus
 
 /* The divider tracks the image widths; both columns keep a fixed height. */
 .result-grid {
-  display: grid; align-items: stretch; gap: 1px;
+  position: relative; display: grid; align-items: stretch; gap: 1px;
   width: 100%; min-width: 0; max-width: 100%; padding: 0;
   overflow: hidden; border-radius: 12px; background: var(--line);
 }
@@ -151,4 +151,32 @@ button:focus-visible, select:focus-visible, input:focus-visible, .dropzone:focus
   margin: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden;
 }
 .result-grid .download-button svg { width: 21px; height: 21px; max-width: 100%; }
+.result-divider {
+  position: absolute; top: 0; z-index: 1;
+  width: 44px; height: calc(var(--result-max-height) * 1px);
+  transform: translateX(-50%); display: grid; place-items: center;
+  cursor: ew-resize; touch-action: none; user-select: none;
+}
+.result-divider::before { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: #777; }
+.result-divider span {
+  position: relative; display: grid; place-items: center;
+  width: 28px; height: 44px; border: 1px solid #aaa; border-radius: 14px;
+  background: #fff; color: #333; font-size: 20px;
+  box-shadow: 0 2px 8px #0002; pointer-events: none;
+}
+.result-divider:focus-visible { outline: 2px solid #444; outline-offset: -3px; }
+.result-divider.is-dragging span { background: #333; color: white; }
 @media(max-width: 700px) { .result-grid { --result-max-height: 260; } }
+
+/* Once loaded, the result itself is the editor. */
+.workspace-grid.has-image { grid-template-columns: minmax(0, 1fr); }
+.workspace-grid.has-image .editor-panel { display: none; }
+.result-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px; }
+.result-toolbar .text-button { flex-shrink: 0; min-height: 44px; padding: 10px 12px; font-size: 12px; }
+.result-toolbar .detect-state { flex: 1; min-width: 0; margin: 0; padding: 0; border-radius: 0; background: transparent; font-size: 11px; line-height: 1.5; }
+
+/* One angle control and a compact reset action. */
+.panel.adjust-panel { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.adjust-panel .angle-control { flex: 1; min-width: 0; }
+.adjust-panel .range-label { display: flex; justify-content: space-between; margin: 0 0 4px !important; }
+.adjust-panel .reset-button { flex: none; display: grid; place-items: center; width: 44px; min-height: 44px; padding: 0; margin: 0; }
