@@ -82,8 +82,8 @@ h3 { margin: 0; font-size: 14px; letter-spacing: -.03em; }
 .placeholder-face::before { left: 19px; }.placeholder-face::after { right: 19px; }
 .fake-mouth { width: 20px; height: 7px; border-radius: 0 0 50% 50%; border-bottom: 2px solid #b3afe0; position: absolute; top: 67px; left: 28px; }
 .placeholder-divider { height: 95px; border-left: 1px dashed #ccc8eb; }
-.result-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 13px; }
-.result-card { min-width: 0; border: 1px solid #ededf0; border-radius: 14px; padding: 12px; }
+.result-grid { --result-max-height: 390; display: flex; align-items: flex-start; gap: 13px; overflow-x: auto; padding-bottom: 4px; }
+.result-card { flex: 0 0 auto; min-width: 136px; border: 1px solid #ededf0; border-radius: 14px; padding: 12px; }
 .result-card-top { display: flex; align-items: center; gap: 9px; min-height: 52px; padding: 3px 0 12px; }
 .result-index { flex-shrink: 0; background: var(--purple-tint); color: var(--purple); width: 27px; height: 27px; border-radius: 7px; display: inline-grid; place-items: center; font: 800 13px/1 "Helvetica Neue", Arial, sans-serif; }
 .result-card-top h3 { font-size: 12px; line-height: 1.5; }
@@ -124,3 +124,31 @@ button:focus-visible, select:focus-visible, input:focus-visible, .dropzone:focus
 .download-button:hover { background: #eee; }
 .preview-wrap { cursor: crosshair; }
 #angleDisplay { color: #333; font-variant-numeric: tabular-nums; }
+
+/* The divider tracks the image widths; both columns keep a fixed height. */
+.result-grid {
+  display: grid; align-items: stretch; gap: 1px;
+  width: 100%; min-width: 0; max-width: 100%; padding: 0;
+  overflow: hidden; border-radius: 12px; background: var(--line);
+}
+.result-grid .result-card {
+  display: flex; flex-direction: column;
+  min-width: 0; width: auto; padding: 0; border: 0; border-radius: 0;
+  overflow: hidden; background: var(--paper);
+}
+.result-grid .result-image {
+  display: flex; align-items: center; justify-content: center;
+  flex: none; min-width: 0; min-height: 0; width: 100%; border-radius: 0;
+  height: calc(var(--result-max-height) * 1px);
+}
+.result-grid .result-image canvas {
+  flex: 0 1 auto; min-width: 0;
+  width: var(--display-width); height: var(--display-height);
+  max-width: 100%; max-height: 100%; object-fit: contain;
+}
+.result-grid .download-button {
+  flex: none; width: 100%; min-width: 0; height: 44px; min-height: 44px;
+  margin: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden;
+}
+.result-grid .download-button svg { width: 21px; height: 21px; max-width: 100%; }
+@media(max-width: 700px) { .result-grid { --result-max-height: 260; } }

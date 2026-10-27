@@ -55,7 +55,7 @@
           </div>
         </section>
 
-        <section class="panel results-panel" aria-labelledby="results-title">
+        <section class="panel results-panel" aria-label="生成画像">
           <div id="emptyResults" class="results-empty">
             <div class="placeholder-graphic" aria-hidden="true">
               <div class="placeholder-face left-face"><div class="fake-eye"></div><div class="fake-mouth"></div></div>
@@ -66,19 +66,16 @@
             <p>写真をアップロードすると、<br>2パターンの対称画像がここに表示されます。</p>
           </div>
           <div id="results" class="hidden">
-            <div class="result-grid">
+            <div id="resultGrid" class="result-grid">
               <article class="result-card">
-                <div class="result-card-top"><span class="result-index">A</span><div><h3>左側からつくる顔</h3><p>LEFT → RIGHT</p></div></div>
                 <div class="result-image"><canvas id="leftCanvas" aria-label="元画像の左半分を反転コピーした顔画像" role="img"></canvas></div>
-                <button id="saveLeft" class="download-button" type="button"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v3h16v-3"/></svg> PNGで保存</button>
+                <button id="saveLeft" class="download-button" type="button" aria-label="左側から作った画像をPNGで保存" title="画像を保存"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v3h16v-3"/></svg></button>
               </article>
               <article class="result-card">
-                <div class="result-card-top"><span class="result-index">B</span><div><h3>右側からつくる顔</h3><p>RIGHT → LEFT</p></div></div>
                 <div class="result-image"><canvas id="rightCanvas" aria-label="元画像の右半分を反転コピーした顔画像" role="img"></canvas></div>
-                <button id="saveRight" class="download-button" type="button"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v3h16v-3"/></svg> PNGで保存</button>
+                <button id="saveRight" class="download-button" type="button" aria-label="右側から作った画像をPNGで保存" title="画像を保存"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v3h16v-3"/></svg></button>
               </article>
             </div>
-            <p class="result-footnote">中心線を移動すると、2つの画像も自動的に更新されます。画像は中心線を軸に左右同じ幅で切り出しています。</p>
           </div>
         </section>
       </div>

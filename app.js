@@ -17,6 +17,7 @@ const previewWrap = $("previewWrap");
 const previewCanvas = $("previewCanvas");
 const leftCanvas = $("leftCanvas");
 const rightCanvas = $("rightCanvas");
+const resultGrid = $("resultGrid");
 const faceSelect = $("faceSelect");
 const axisRange = $("axisRange");
 const axisDisplay = $("axisDisplay");
@@ -81,7 +82,7 @@ function drawPreview() {
     const face = faces[i];
     ctx.save();
     ctx.lineWidth = i === activeFace ? 2.5 : 1.5;
-  ctx.strokeStyle = i === activeFace ? "#777" : "rgba(255,255,255,.75)";
+    ctx.strokeStyle = i === activeFace ? "#777" : "rgba(255,255,255,.75)";
     ctx.setLineDash(i === activeFace ? [] : [6, 5]);
     ctx.strokeRect(face.x * sx, face.y * sy, face.width * sx, face.height * sy);
     ctx.restore();
@@ -106,41 +107,92 @@ function drawPreview() {
   ctx.restore();
 }
 
-// The output is a symmetric crop around the axis. Its original pixels are preserved
-// up to the application's MAX_IMAGE_SIDE cap, without stretching either half.
-function drawMirroredResults() {
-  const srcW = sourceCanvas.width;
-  const srcH = sourceCanvas.height;
-  const half = Math.max(1, Math.min(axisX, srcW - axisX));
-  const outW = half * 2;
-  for (const canvas of [leftCanvas, rightCanvas]) {
-    if (canvas.width !== outW || canvas.height !== srcH) {
-      canvas.width = outW;
-      canvas.height = srcH;
+// Clip the rotated source rectangle at u = 0 (the reflection axis).
+// Each side keeps its own complete extent instead of sharing the shorter width.
+function getSideBounds(corners, side) {
+  const inside = ([u]) => side === "left" ? u <= 0 : u >= 0;
+  const polygon = [];
+  for (let i = 0; i < corners.length; i++) {
+    const start = corners[i];
+    const end = corners[(i + 1) % corners.length];
+    if (inside(start)) polygon.push(start);
+    if (inside(start) !== inside(end)) {
+      const t = -start[0] / (end[0] - start[0]);
+      polygon.push([0, start[1] + t * (end[1] - start[1])]);
     }
   }
+  // Ignore floating point noise at integer boundaries, without cropping a pixel.
+  const roundExtent = (value) => Math.max(1, Math.ceil(value - 1e-9));
+  const halfWidth = roundExtent(Math.max(...polygon.map(([u]) => Math.abs(u))));
+  const top = Math.min(...polygon.map(([, v]) => v));
+  const bottom = Math.max(...polygon.map(([, v]) => v));
+  return { halfWidth, top, height: roundExtent(bottom - top) };
+}
+
+function drawMirroredResults() {
+  const srcW = sourceCanvas.width, srcH = sourceCanvas.height;
   const theta = axisAngle * Math.PI / 180;
   const cos = Math.cos(theta), sin = Math.sin(theta);
   const cx = axisX, cy = axisY;
+  // u is perpendicular to the preview axis; v runs along it.
+  const corners = [[0, 0], [srcW, 0], [srcW, srcH], [0, srcH]].map(([x, y]) => [
+    cos * (x - cx) - sin * (y - cy),
+    sin * (x - cx) + cos * (y - cy),
+  ]);
   const drawSide = (canvas, side) => {
+    const { halfWidth, top, height } = getSideBounds(corners, side);
+    const outW = halfWidth * 2;
+    if (canvas.width !== outW || canvas.height !== height) {
+      canvas.width = outW;
+      canvas.height = height;
+    }
+    halfCanvas.width = halfWidth;
+    halfCanvas.height = height;
+    const halfCtx = halfCanvas.getContext("2d");
+    const offset = side === "left" ? halfWidth : 0;
+    halfCtx.setTransform(cos, sin, -sin, cos,
+      offset - cos * cx + sin * cy, -top - sin * cx - cos * cy);
+    halfCtx.drawImage(sourceCanvas, 0, 0);
+
     const ctx = canvas.getContext("2d");
-    halfCanvas.width = half; halfCanvas.height = srcH;
-    ctx.clearRect(0, 0, outW, srcH);
-    ctx.save();
-    ctx.beginPath(); ctx.rect(0, 0, half, srcH); ctx.clip();
-    const offset = side === "left" ? half : 0;
-    // Match the preview axis: its direction is (sin θ, cos θ).
-    // Local horizontal distance is therefore the perpendicular (cos θ, -sin θ).
-    ctx.setTransform(cos, sin, -sin, cos, offset - cos * cx + sin * cy, cy - sin * cx - cos * cy);
-    ctx.drawImage(sourceCanvas, 0, 0);
-    ctx.restore();
-    halfCanvas.getContext("2d").drawImage(canvas, 0, 0, half, srcH, 0, 0, half, srcH);
-    ctx.save(); ctx.translate(outW, 0); ctx.scale(-1, 1); ctx.drawImage(halfCanvas, 0, 0);
-    ctx.restore();
+    ctx.clearRect(0, 0, outW, height);
+    if (side === "left") {
+      // The left half's axis edge is on its right.
+      ctx.drawImage(halfCanvas, 0, 0);
+      ctx.save(); ctx.translate(outW, 0); ctx.scale(-1, 1);
+      ctx.drawImage(halfCanvas, 0, 0); ctx.restore();
+    } else {
+      // The right half's axis edge is on its left. Keep it at the seam.
+      ctx.drawImage(halfCanvas, halfWidth, 0);
+      ctx.save(); ctx.translate(halfWidth, 0); ctx.scale(-1, 1);
+      ctx.drawImage(halfCanvas, 0, 0); ctx.restore();
+    }
   };
   drawSide(leftCanvas, "left");
   drawSide(rightCanvas, "right");
+  layoutResults();
 }
+
+function layoutResults() {
+  if (!resultGrid.clientWidth || !sourceCanvas.width) return;
+  const style = getComputedStyle(resultGrid);
+  const available = Math.max(0, resultGrid.clientWidth - (parseFloat(style.columnGap) || 0));
+  const totalWidth = leftCanvas.width + rightCanvas.width;
+  const maxHeight = parseFloat(style.getPropertyValue("--result-max-height"));
+  const scale = Math.min(available / totalWidth,
+    maxHeight / Math.max(leftCanvas.height, rightCanvas.height));
+
+  // Use the entire container. The divider follows the actual output width ratio,
+  // with no minimum card width, padding allowance, or horizontal scrolling.
+  resultGrid.style.gridTemplateColumns =
+    `minmax(0, ${leftCanvas.width}fr) minmax(0, ${rightCanvas.width}fr)`;
+  for (const canvas of [leftCanvas, rightCanvas]) {
+    canvas.style.setProperty("--display-width", `${canvas.width * scale}px`);
+    canvas.style.setProperty("--display-height", `${canvas.height * scale}px`);
+  }
+}
+
+new ResizeObserver(layoutResults).observe(resultGrid);
 
 function setFaceOptions() {
   faceSelect.replaceChildren();
